@@ -34,7 +34,7 @@ cuentaGALICIA = CuentaBancaria(
     peso="ARS",
     banco="007",
     nombre = "GALICIA_000089983831",
-    abreviatura="GAL"
+    abreviatura="Galicia"
 )
 
 
@@ -45,7 +45,7 @@ cuentaPATAGONIA = CuentaBancaria(
     peso="ARS",
     banco="034",
     nombre = "PATAGONIA_04310075660600020",
-    abreviatura="PAT"
+    abreviatura="Patagonia"
 )
 
 
@@ -55,7 +55,7 @@ cuentaMACRO = CuentaBancaria(
     peso="ARS",
     banco="285",
     nombre ="MACRO_330209419871696",
-    abreviatura="MAC"
+    abreviatura="Macro"
 )
 
 cuentaSANTANDER = CuentaBancaria(
@@ -64,7 +64,7 @@ cuentaSANTANDER = CuentaBancaria(
     peso="ARS",
     banco="072",
     nombre = "SANTANDER_72700150309",
-    abreviatura="SAN"
+    abreviatura="Santander"
 )
 
 cuentaPROVINCIABSAS = CuentaBancaria(
@@ -73,7 +73,7 @@ cuentaPROVINCIABSAS = CuentaBancaria(
     peso="ARS",
     banco="014",
     nombre = "PROVINCIA_51380544049",
-    abreviatura="PROV"
+    abreviatura="Provincia"
 )
 
 

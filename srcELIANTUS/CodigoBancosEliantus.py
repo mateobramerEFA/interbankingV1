@@ -25,7 +25,7 @@ cuentaGALICIA= CuentaBancaria(
     peso="ARS",
     banco="007",
     nombre = "GALICIA_000157473836",
-    abreviatura="GAL"
+    abreviatura="Galicia"
 )
 
 
@@ -35,7 +35,7 @@ cuentaMACRO_1 = CuentaBancaria(
     peso= "ARS",
     banco="285",
     nombre ="MACRO_330209424492138",
-    abreviatura="MAC"
+    abreviatura="Macro"
 )
 
 cuentaMACRO_2 = CuentaBancaria(
@@ -44,7 +44,7 @@ cuentaMACRO_2 = CuentaBancaria(
     peso="ARS",
     banco="285",
     nombre ="MACRO_430209591789116",
-    abreviatura="MAC"
+    abreviatura="Macro"
 )
 
 cuentaMACRO_3 = CuentaBancaria(
@@ -53,7 +53,7 @@ cuentaMACRO_3 = CuentaBancaria(
     peso="USD",
     banco="285",
     nombre ="MACRO_230209591789347",
-    abreviatura="MAC"
+    abreviatura="Macro"
 )
 
 cuentaSANTANDER_1 = CuentaBancaria(
@@ -62,7 +62,7 @@ cuentaSANTANDER_1 = CuentaBancaria(
     peso="ARS",
     banco="072",
     nombre = "SANTANDER_72700090047",
-    abreviatura="SAN"
+    abreviatura="Santander"
 )
 
 cuentaSANTANDER_2 = CuentaBancaria(
@@ -71,7 +71,7 @@ cuentaSANTANDER_2 = CuentaBancaria(
     peso="USD",
     banco="072",
     nombre = "SANTANDER_72720156406",
-    abreviatura="SAN"
+    abreviatura="Santander"
 )
 
 cuentaPROVINCIABSAS = CuentaBancaria(
@@ -80,7 +80,7 @@ cuentaPROVINCIABSAS = CuentaBancaria(
     peso="ARS",
     banco="014",
     nombre = "PROVINCIA_51380606277",
-    abreviatura="PROV"
+    abreviatura="Provincia"
 )
 
 cuentaSUPERVILLE_1 = CuentaBancaria(
@@ -89,7 +89,7 @@ cuentaSUPERVILLE_1 = CuentaBancaria(
     peso="ARS",
     banco="027",
     nombre = "SUPERVILLE_020006085458001",
-    abreviatura="SUPER"
+    abreviatura="Superville"
 )
 
 cuentaSUPERVILLE_2 = CuentaBancaria(
@@ -98,7 +98,7 @@ cuentaSUPERVILLE_2 = CuentaBancaria(
     peso="USD",
     banco="027",
     nombre = "SUPERVILLE_020006085458002",
-    abreviatura="SUPER"
+    abreviatura="Superville"
 )
 
 CUENTAS = [
