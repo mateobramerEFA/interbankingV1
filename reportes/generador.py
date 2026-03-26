@@ -1,6 +1,6 @@
 """
 generador.py
-Genera un único Excel en memoria con todos los movimientos de todas las cuentas.
+Genera un único Excel en memoria con todos los movimientos de cuentas seleccionadas.
 """
 
 import io
@@ -148,7 +148,7 @@ def _aplicar_formato_hoja(ws):
 # MAIN
 # ─────────────────────────────────────────────
 
-def generar_excel(empresa: str, desde: str, hasta: str) -> bytes:
+def generar_excel(empresa: str, desde: str, hasta: str, cuentas_seleccionadas=None):
 
     secrets = st.secrets[empresa]
 
@@ -161,14 +161,25 @@ def generar_excel(empresa: str, desde: str, hasta: str) -> bytes:
 
     hubo_datos = False
 
-    for cuenta in CUENTAS:
-        _, statements = obtener_extractos(cuenta, token, desde, hasta, secrets)
+    cuentas_a_usar = cuentas_seleccionadas if cuentas_seleccionadas else CUENTAS
 
-        if not statements:
-            continue
+    resultados = []
 
-        hubo_datos = True
-        _escribir_cuenta(ws, cuenta, statements, desde, hasta)
+    for cuenta in cuentas_a_usar:
+        try:
+            _, statements = obtener_extractos(cuenta, token, desde, hasta, secrets)
+
+            if not statements:
+                resultados.append((cuenta, False))
+                continue
+
+            resultados.append((cuenta, True))
+            hubo_datos = True
+
+            _escribir_cuenta(ws, cuenta, statements, desde, hasta)
+
+        except Exception:
+            resultados.append((cuenta, False))
 
     if not hubo_datos:
         ws.append(["Sin movimientos para el período seleccionado."])
@@ -178,4 +189,5 @@ def generar_excel(empresa: str, desde: str, hasta: str) -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    return buf.read()
+
+    return buf.read(), resultados

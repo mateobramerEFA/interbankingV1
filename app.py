@@ -1,36 +1,15 @@
 import streamlit as st
-import io
 from datetime import date, timedelta
+import importlib
+
 from reportes.generador import generar_excel
 
-import yaml
-from pathlib import Path
-import streamlit_authenticator as stauth
-
-# ─────────────────────────────────────────────
-# CONFIGURACIÓN DE PÁGINA
-# ─────────────────────────────────────────────
-
-st.set_page_config(
-    page_title="Interbanking · Reportes",
-    page_icon="📊",
-    layout="centered",
-)
-
 # ─────────────────────────────────────────────
 # LOGIN
 # ─────────────────────────────────────────────
 
-import streamlit as st
-
-# ─────────────────────────────
-# USUARIOS DESDE SECRETS
-# ─────────────────────────────
 USUARIOS = st.secrets["usuarios"]
 
-# ─────────────────────────────
-# LOGIN
-# ─────────────────────────────
 if "auth" not in st.session_state:
     st.session_state["auth"] = False
 
@@ -50,10 +29,22 @@ if not st.session_state["auth"]:
 
     st.stop()
 
-# ─────────────────────────────
-# APP NORMAL
-# ─────────────────────────────
+# Usuario logueado
 st.success(f"Bienvenido {st.session_state['user']} 👋")
+
+if st.sidebar.button("Cerrar sesión"):
+    st.session_state["auth"] = False
+    st.rerun()
+
+# ─────────────────────────────────────────────
+# CONFIG PÁGINA
+# ─────────────────────────────────────────────
+
+st.set_page_config(
+    page_title="Interbanking · Reportes",
+    page_icon="📊",
+    layout="centered",
+)
 
 # ─────────────────────────────────────────────
 # ESTILOS
@@ -61,54 +52,7 @@ st.success(f"Bienvenido {st.session_state['user']} 👋")
 
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
-  .block-container { max-width: 680px; padding-top: 2.5rem; }
-
-  h1 {
-    font-family: 'Syne', sans-serif !important;
-    font-size: 2.4rem !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.03em !important;
-    line-height: 1.1 !important;
-  }
-
-  .tag {
-    display: inline-block;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #2d6348;
-    background: #e8f5ee;
-    border: 1px solid #b8ddc8;
-    padding: 4px 12px;
-    border-radius: 100px;
-    margin-bottom: 16px;
-  }
-
-  .desc {
-    font-size: 15px;
-    color: #7a7870;
-    line-height: 1.7;
-    margin-bottom: 8px;
-  }
-
-  .divider {
-    border: none;
-    border-top: 1.5px solid #e0ddd6;
-    margin: 28px 0;
-  }
-
-  .footer-note {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: #aaa;
-    text-align: center;
-    margin-top: 32px;
-    letter-spacing: 0.05em;
-  }
+.block-container { max-width: 700px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -116,13 +60,11 @@ st.markdown("""
 # HEADER
 # ─────────────────────────────────────────────
 
-st.markdown('<div class="tag">📊 Sistema de Reportes Financieros</div>', unsafe_allow_html=True)
-st.title("Extractos bancarios en segundos.")
-st.markdown('<p class="desc">Seleccioná la empresa y el período para descargar el Excel con todos los movimientos y saldos.</p>', unsafe_allow_html=True)
-st.markdown('<hr class="divider">', unsafe_allow_html=True)
+st.title("📊 Extractos bancarios")
+st.caption("Seleccioná empresa, cuentas y período")
 
 # ─────────────────────────────────────────────
-# FORMULARIO
+# EMPRESA
 # ─────────────────────────────────────────────
 
 empresa = st.selectbox(
@@ -131,47 +73,113 @@ empresa = st.selectbox(
     format_func=lambda x: x.capitalize(),
 )
 
+# ─────────────────────────────────────────────
+# CARGAR CUENTAS DINÁMICAMENTE
+# ─────────────────────────────────────────────
+
+EMPRESAS_MODULOS = {
+    "eliantus": "srcELIANTUS.CodigoBancosEliantus",
+    "elementa": "srcELEMENTA.CodigoBancosElementa",
+    "integra": "srcINTEGRA.CodigoBancosINTEGRA",
+}
+
+mod_cuentas = importlib.import_module(EMPRESAS_MODULOS[empresa])
+CUENTAS = mod_cuentas.CUENTAS
+
+# ─────────────────────────────────────────────
+# FORMATO CUENTAS
+# ─────────────────────────────────────────────
+
+def format_cuenta(c):
+    return f"{c.abreviatura} - {c.numero} ({c.banco})"
+
+# ─────────────────────────────────────────────
+# SELECTOR DE CUENTAS
+# ─────────────────────────────────────────────
+
+st.markdown("### 🏦 Cuentas")
+
 col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("Seleccionar todas"):
+        st.session_state["cuentas"] = CUENTAS
+
+with col2:
+    if st.button("Limpiar selección"):
+        st.session_state["cuentas"] = []
+
+cuentas_seleccionadas = st.multiselect(
+    "Elegí las cuentas",
+    options=CUENTAS,
+    default=st.session_state.get("cuentas", []),
+    format_func=format_cuenta
+)
+
+st.session_state["cuentas"] = cuentas_seleccionadas
+
+# ─────────────────────────────────────────────
+# FECHAS
+# ─────────────────────────────────────────────
+
+col1, col2 = st.columns(2)
+
 with col1:
     desde = st.date_input("Desde", value=date.today() - timedelta(days=7))
+
 with col2:
     hasta = st.date_input("Hasta", value=date.today())
-
-st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # GENERAR
 # ─────────────────────────────────────────────
 
-if st.button("⬇ Descargar Excel", use_container_width=True, type="primary"):
+if st.button("⬇ Generar reporte", use_container_width=True):
+
+    if not cuentas_seleccionadas:
+        st.warning("⚠ Seleccioná al menos una cuenta")
+        st.stop()
 
     if desde > hasta:
-        st.error("⚠ La fecha 'Desde' no puede ser mayor que 'Hasta'.")
-    else:
-        with st.spinner("Conectando con Interbanking y generando el reporte..."):
-            try:
-                excel_bytes = generar_excel(
-                    empresa=empresa,
-                    desde=str(desde),
-                    hasta=str(hasta),
-                )
-                nombre = f"reporte_{empresa}_{desde}_{hasta}.xlsx"
+        st.error("⚠ La fecha 'Desde' no puede ser mayor que 'Hasta'")
+        st.stop()
 
-                st.success("✓ Reporte generado correctamente.")
+    with st.spinner("Procesando cuentas..."):
 
-                st.download_button(
-                    label="📥 Hacer click para descargar",
-                    data=excel_bytes,
-                    file_name=nombre,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+        excel_bytes, resultados = generar_excel(
+            empresa=empresa,
+            desde=str(desde),
+            hasta=str(hasta),
+            cuentas_seleccionadas=cuentas_seleccionadas
+        )
 
-            except Exception as e:
-                st.error(f"✗ Error al generar el reporte: {e}")
+    # ─────────────────────────────
+    # RESULTADOS
+    # ─────────────────────────────
 
-# ─────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────
+    con_mov = [c for c, ok in resultados if ok]
+    sin_mov = [c for c, ok in resultados if not ok]
 
-st.markdown('<p class="footer-note">Sistema interno · No compartir fuera de la organización</p>', unsafe_allow_html=True)
+    if con_mov:
+        st.success(f"✔ {len(con_mov)} cuentas con movimientos")
+
+    if sin_mov:
+        st.warning(f"⚠ {len(sin_mov)} cuentas sin movimientos")
+
+    for cuenta, ok in resultados:
+        if ok:
+            st.success(f"{cuenta.abreviatura} → con movimientos")
+        else:
+            st.warning(f"{cuenta.abreviatura} → sin movimientos")
+
+    # ─────────────────────────────
+    # DESCARGA
+    # ─────────────────────────────
+
+    st.download_button(
+        label="📥 Descargar Excel",
+        data=excel_bytes,
+        file_name=f"reporte_{empresa}_{desde}_{hasta}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
