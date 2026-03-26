@@ -1,5 +1,5 @@
 credentials:
-  users:
+  usernames:
     mateo:
       name: Mateo Bramer
       password: $2b$12$aVihulWqqOcg0/uWZEz2Yu5M4ehHAYba26LWQU3yeOVoutzSzkH3a
