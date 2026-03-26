@@ -21,39 +21,29 @@ st.set_page_config(
 # LOGIN
 # ─────────────────────────────────────────────
 
-ruta_yaml = Path(__file__).parent / "usuarios.yaml"
+import streamlit as st
 
-with open(ruta_yaml) as file:
-    config = yaml.load(file, Loader=yaml.SafeLoader)
+USUARIOS = {
+    "mateo": "1234",
+    "ale": "abcd"
+}
 
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    cookie_expiry_days=config['cookie']['expiry_days']
-)
+st.title("Login")
 
-# Render login
-authenticator.login()
+user = st.text_input("Usuario")
+pwd = st.text_input("Contraseña", type="password")
 
-name = st.session_state.get("name")
-authentication_status = st.session_state.get("authentication_status")
-username = st.session_state.get("username")
+if st.button("Ingresar"):
+    if user in USUARIOS and USUARIOS[user] == pwd:
+        st.session_state["auth"] = True
+        st.session_state["user"] = user
+    else:
+        st.error("Credenciales incorrectas")
 
-# Control acceso
-if authentication_status is False:
-    st.error("❌ Usuario o contraseña incorrectos")
+if not st.session_state.get("auth"):
     st.stop()
 
-if authentication_status is None:
-    st.warning("🔐 Ingresá tus credenciales")
-    st.stop()
-
-# Usuario logueado
-st.success(f"Bienvenido {name} 👋")
-
-# Logout
-authenticator.logout("Cerrar sesión", "sidebar")
+st.success(f"Bienvenido {st.session_state['user']}")
 
 # ─────────────────────────────────────────────
 # ESTILOS
