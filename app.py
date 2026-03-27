@@ -1,12 +1,9 @@
 import streamlit as st
 from datetime import date, timedelta
 import importlib
-import os
 from reportes.generador import generar_excel
 
-# ─────────────────────────────────────────────
-# CONFIG STREAMLIT
-# ─────────────────────────────────────────────
+# ✅ Configuración de la página
 st.set_page_config(
     page_title="Interbanking · Reportes",
     page_icon="📊",
@@ -14,20 +11,9 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# AUTH AZURE (MICROSOFT)
+# Usuario ficticio para pruebas (sin login)
 # ─────────────────────────────────────────────
-user_email = os.getenv("X-MS-CLIENT-PRINCIPAL-NAME")
-
-if not user_email:
-    st.error("No autenticado. Iniciá sesión con Microsoft.")
-    st.stop()
-
-# Optional: restringir dominios permitidos
-allowed_domains = os.getenv("ALLOWED_DOMAINS", "tuempresa.com").split(",")
-if not any(user_email.endswith(f"@{d}") for d in allowed_domains):
-    st.error("No autorizado")
-    st.stop()
-
+user_email = "test@empresa.com"
 st.success(f"Bienvenido {user_email} 👋")
 
 # ─────────────────────────────────────────────
@@ -77,17 +63,19 @@ def format_cuenta(c):
 # SELECTOR DE CUENTAS
 # ─────────────────────────────────────────────
 st.markdown("### 🏦 Cuentas")
-
 col1, col2 = st.columns(2)
+
 with col1:
     if st.button("Seleccionar todas"):
         st.session_state["cuentas"] = CUENTAS
+
 with col2:
     if st.button("Limpiar selección"):
         st.session_state["cuentas"] = []
 
 default_cuentas = [
-    c for c in st.session_state.get("cuentas", []) if c in CUENTAS
+    c for c in st.session_state.get("cuentas", [])
+    if c in CUENTAS
 ]
 
 cuentas_seleccionadas = st.multiselect(
@@ -96,14 +84,17 @@ cuentas_seleccionadas = st.multiselect(
     default=default_cuentas,
     format_func=format_cuenta
 )
+
 st.session_state["cuentas"] = cuentas_seleccionadas
 
 # ─────────────────────────────────────────────
 # FECHAS
 # ─────────────────────────────────────────────
 col1, col2 = st.columns(2)
+
 with col1:
     desde = st.date_input("Desde", value=date.today() - timedelta(days=7))
+
 with col2:
     hasta = st.date_input("Hasta", value=date.today())
 
@@ -122,7 +113,6 @@ if st.button("⬇ Generar reporte", use_container_width=True):
 
     with st.spinner("Procesando cuentas..."):
 
-        # llamar al generador actualizado que usa Azure/variables de entorno
         excel_bytes, resultados = generar_excel(
             empresa=empresa,
             desde=str(desde),
@@ -141,7 +131,6 @@ if st.button("⬇ Generar reporte", use_container_width=True):
     if sin_mov:
         st.warning(f"⚠ {len(sin_mov)} cuentas sin movimientos")
 
-    # mostrar detalle de cada cuenta
     for cuenta, ok in resultados:
         if ok:
             st.success(f"{cuenta.abreviatura} → con movimientos")
@@ -149,7 +138,7 @@ if st.button("⬇ Generar reporte", use_container_width=True):
             st.warning(f"{cuenta.abreviatura} → sin movimientos")
 
     # ─────────────────────────────
-    # DESCARGA EXCEL
+    # DESCARGA
     # ─────────────────────────────
     st.download_button(
         label="📥 Descargar Excel",
