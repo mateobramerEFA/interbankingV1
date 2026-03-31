@@ -1,5 +1,0 @@
-streamlit
-openpyxl
-requests
-PyYAML
-bcrypt
