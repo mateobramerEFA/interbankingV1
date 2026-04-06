@@ -142,11 +142,16 @@ def _aplicar_formato_hoja(ws):
     ws.freeze_panes = "A2"
 
 
-def _nombre_archivo(empresa, cuenta, desde, hasta):
-    """Genera el nombre: EMPRESA_BANCO_DESDE_HASTA.xlsx"""
+def _formatear_fecha(fecha_iso):
+    """Convierte 2026-03-30 a 30-03"""
+    anio, mes, dia = fecha_iso.split("-")
+    return f"{dia}-{mes}"
+
+
+def _nombre_archivo(cuenta, desde, hasta):
+    """Genera el nombre: BANCO_DD-MM_DD-MM.xlsx"""
     banco = cuenta.banco.replace(" ", "_")
-    nombre = cuenta.nombre.replace(" ", "_")
-    return f"{empresa.upper()}_{nombre}_{banco}_{desde}_{hasta}.xlsx".replace("/", "-")
+    return f"{banco}_{_formatear_fecha(desde)}_{_formatear_fecha(hasta)}.xlsx"
 
 
 def _generar_excel_cuenta(cuenta, statements, desde, hasta):
@@ -189,7 +194,7 @@ def generar_zip(empresa: str, desde: str, hasta: str, cuentas_seleccionadas=None
                     continue
 
                 excel_bytes = _generar_excel_cuenta(cuenta, statements, desde, hasta)
-                filename = _nombre_archivo(empresa, cuenta, desde, hasta)
+                filename = _nombre_archivo(cuenta, desde, hasta)
                 zf.writestr(filename, excel_bytes)
                 resultados.append((cuenta, True))
                 print(f"[INFO] {cuenta.nombre} → OK ({filename})")
