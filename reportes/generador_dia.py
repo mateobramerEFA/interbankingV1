@@ -1,10 +1,11 @@
 """
 generador_dia.py
-Genera un Excel en memoria con los movimientos del día para una cuenta.
-Usa el mismo formato visual que generador.py.
+Genera un ZIP en memoria con un Excel por cuenta seleccionada (movimientos del día).
+Mismo formato visual que generador.py.
 """
 
 import io
+import zipfile
 import http.client
 import json
 import importlib
@@ -20,25 +21,13 @@ from auth import obtener_token
 # ─────────────────────────────────────────────
 
 EMPRESAS = {
-    "eliantus": {
-        "cuentas":    "srcELIANTUS.CodigoBancosEliantus",
-        "client_id":  "ELIANTUS_CLIENTID",
-        "customer_id":"ELIANTUS_USER",
-    },
-    "elementa": {
-        "cuentas":    "srcELEMENTA.CodigoBancosElementa",
-        "client_id":  "ELEMENTA_CLIENTID",
-        "customer_id":"ELEMENTA_USER",
-    },
-    "integra": {
-        "cuentas":    "srcINTEGRA.CodigoBancosINTEGRA",
-        "client_id":  "INTEGRA_CLIENTID",
-        "customer_id":"INTEGRA_USER",
-    },
+    "eliantus": { "cuentas": "srcELIANTUS.CodigoBancosEliantus" },
+    "elementa": { "cuentas": "srcELEMENTA.CodigoBancosElementa" },
+    "integra":  { "cuentas": "srcINTEGRA.CodigoBancosINTEGRA"  },
 }
 
 # ─────────────────────────────────────────────
-# ESTILOS  (igual que generador.py)
+# ESTILOS
 # ─────────────────────────────────────────────
 
 HEADER_FILL   = PatternFill("solid", fgColor="1F4E79")
@@ -59,11 +48,13 @@ def _aplicar_fila(ws, row_num, fill, font):
 
 
 # ─────────────────────────────────────────────
-# OBTENER MOVIMIENTOS DEL DÍA (v2)
+# LLAMADA A LA API
 # ─────────────────────────────────────────────
 
-def _obtener_movimientos_dia(cuenta, token, client_id, customer_id):
-    hoy = date.today().isoformat()
+def _obtener_movimientos_dia(cuenta, token, customer_id):
+    import os
+    hoy       = date.today().isoformat()
+    client_id = os.environ.get("ELIANTUS_CLIENTID", "BxN5OkffX0XHXgprpfybM5zCIaFphzgLvlz0")
 
     conn = http.client.HTTPSConnection("api-gw.interbanking.com.ar")
     headers = {
@@ -90,10 +81,10 @@ def _obtener_movimientos_dia(cuenta, token, client_id, customer_id):
 
 
 # ─────────────────────────────────────────────
-# GENERAR EXCEL
+# GENERAR EXCEL PARA UNA CUENTA
 # ─────────────────────────────────────────────
 
-def _generar_excel_dia(cuenta, general_data, movimientos):
+def _generar_excel(cuenta, general_data, movimientos):
     hoy = date.today().isoformat()
     anio, mes, dia = hoy.split("-")
     fecha_fmt = f"{dia}/{mes}/{anio}"
@@ -102,12 +93,10 @@ def _generar_excel_dia(cuenta, general_data, movimientos):
     ws = wb.active
     ws.title = "Mov. del día"
 
-    # Fila título de cuenta
     ws.append([f"▶ {cuenta.nombre}  — Movimientos del día {fecha_fmt}",
                None, None, None, None, None, None, None, None])
     _aplicar_fila(ws, ws.max_row, ACCOUNT_FILL, ACCOUNT_FONT)
 
-    # Encabezado columnas
     ws.append(["Fecha", "Importe", "Tipo", "CUIT", "Descripción",
                "Saldo Inicial", "Saldo Final", "Total Débitos", "Total Créditos"])
     for cell in ws[ws.max_row]:
@@ -120,8 +109,8 @@ def _generar_excel_dia(cuenta, general_data, movimientos):
                    None, None, None, None])
         _aplicar_fila(ws, ws.max_row, SUBTOTAL_FILL, SUBTOTAL_FONT)
     else:
-        opening = general_data.get("opening_balance") or 0
-        ending  = general_data.get("ending_balance")
+        opening    = general_data.get("opening_balance") or 0
+        ending     = general_data.get("ending_balance")
         deb_total  = general_data.get("debits_total_amount")
         cred_total = general_data.get("credits_total_amount")
 
@@ -143,19 +132,16 @@ def _generar_excel_dia(cuenta, general_data, movimientos):
                        mov.get("customer_cuit"), descripcion,
                        saldo_ini, saldo_fin, None, None])
 
-        # Fila resumen del día
         ws.append([fecha_fmt, None, "RESUMEN DIA", None, None,
                    opening, ending, deb_total, cred_total])
         _aplicar_fila(ws, ws.max_row, SALDO_FILL, SALDO_FONT)
 
-    # Formatos numéricos
     col_numericas = [2, 6, 7, 8, 9]
     for row in ws.iter_rows(min_row=3):
         for cell in row:
             if cell.column in col_numericas and isinstance(cell.value, (int, float)):
                 cell.number_format = NUMBER_FORMAT
 
-    # Anchos
     for col_letra, ancho in {
         "A": 13, "B": 16, "C": 16, "D": 16,
         "E": 45, "F": 17, "G": 17, "H": 17, "I": 17,
@@ -174,28 +160,37 @@ def _generar_excel_dia(cuenta, general_data, movimientos):
 # FUNCIÓN PRINCIPAL
 # ─────────────────────────────────────────────
 
-def generar_excel_dia(empresa: str, indice: int):
+def generar_zip_dia(empresa: str, indices: list):
     """
-    Genera un Excel con los movimientos del día para UNA cuenta.
-    Retorna (excel_bytes, filename, tiene_movimientos).
+    Genera un ZIP en memoria con un Excel por cuenta seleccionada.
+    Retorna (zip_bytes, resultados).
     """
-    config    = EMPRESAS[empresa]
-    mod       = importlib.import_module(config["cuentas"])
-    cuentas   = mod.CUENTAS
-    cuenta    = cuentas[indice]
+    config  = EMPRESAS[empresa]
+    mod     = importlib.import_module(config["cuentas"])
+    cuentas = mod.CUENTAS
 
     token, customer_id = obtener_token(empresa)
 
-    import os
-    client_id = os.environ.get(config["client_id"], "")
+    hoy        = date.today().isoformat()
+    resultados = []
+    zip_buf    = io.BytesIO()
 
-    general_data, movimientos = _obtener_movimientos_dia(
-        cuenta, token, client_id, customer_id
-    )
+    with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for i in indices:
+            if i < 0 or i >= len(cuentas):
+                continue
+            cuenta = cuentas[i]
+            try:
+                general_data, movimientos = _obtener_movimientos_dia(
+                    cuenta, token, customer_id
+                )
+                excel_bytes = _generar_excel(cuenta, general_data, movimientos)
+                filename    = f"{cuenta.abreviatura}_DIA_{hoy}.xlsx"
+                zf.writestr(filename, excel_bytes)
+                resultados.append((cuenta.abreviatura, bool(movimientos)))
+            except Exception as e:
+                print(f"[ERROR] {cuenta.nombre}: {e}")
+                resultados.append((cuenta.abreviatura, False))
 
-    excel_bytes = _generar_excel_dia(cuenta, general_data, movimientos)
-
-    hoy      = date.today().isoformat().replace("-", "")
-    filename = f"{cuenta.abreviatura}_MOV_DIA_{hoy}.xlsx"
-
-    return excel_bytes, filename, bool(movimientos)
+    zip_buf.seek(0)
+    return zip_buf.read(), resultados
