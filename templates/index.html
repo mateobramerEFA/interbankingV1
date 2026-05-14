@@ -203,7 +203,7 @@
     .badge-ars { background: #d4edda; color: #155724; }
     .badge-usd { background: #cce5ff; color: #004085; }
 
-    /* ── SUBMIT BUTTON ─────────────────────────── */
+    /* ── BUTTONS ───────────────────────────────── */
     .btn-primary {
       width: 100%;
       padding: 12px;
@@ -223,6 +223,26 @@
     .btn-primary:hover:not(:disabled) { background: var(--blue-mid); }
     .btn-primary:active:not(:disabled) { transform: scale(.99); }
     .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+
+    .btn-green {
+      width: 100%;
+      padding: 12px;
+      background: #217346;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background .15s, transform .1s;
+    }
+    .btn-green:hover:not(:disabled) { background: #185c38; }
+    .btn-green:active:not(:disabled) { transform: scale(.99); }
+    .btn-green:disabled { opacity: .55; cursor: not-allowed; }
 
     .spinner {
       width: 18px; height: 18px;
@@ -380,13 +400,22 @@
     </div>
   </div>
 
-  <!-- BOTÓN -->
+  <!-- BOTÓN GENERAR REPORTE -->
   <button class="btn-primary" id="btn-generar">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
     Generar reporte
+  </button>
+
+  <!-- BOTÓN MOVIMIENTOS DEL DÍA -->
+  <button class="btn-green" id="btn-dia">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+    Movimientos del día
   </button>
 
   <!-- RESULTADOS -->
@@ -400,6 +429,7 @@
   const btnAll      = document.getElementById("btn-all");
   const btnClear    = document.getElementById("btn-clear");
   const btnGenerar  = document.getElementById("btn-generar");
+  const btnDia      = document.getElementById("btn-dia");
   const resultsDiv  = document.getElementById("results");
 
   let allCuentas = [];
@@ -435,6 +465,12 @@
     `).join("");
   }
 
+  function getIndicesSeleccionados() {
+    return Array.from(
+      accountList.querySelectorAll("input[type=checkbox]:checked")
+    ).map(cb => parseInt(cb.value));
+  }
+
   btnAll.addEventListener("click", () => {
     accountList.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = true);
   });
@@ -445,13 +481,11 @@
 
   empresaSel.addEventListener("change", () => cargarCuentas(empresaSel.value));
 
+  // ── GENERAR REPORTE HISTÓRICO ─────────────────
   btnGenerar.addEventListener("click", async () => {
     resultsDiv.innerHTML = "";
 
-    const indices = Array.from(
-      accountList.querySelectorAll("input[type=checkbox]:checked")
-    ).map(cb => parseInt(cb.value));
-
+    const indices = getIndicesSeleccionados();
     const desde = document.getElementById("desde").value;
     const hasta = document.getElementById("hasta").value;
 
@@ -489,6 +523,47 @@
           <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
         Generar reporte`;
+    }
+  });
+
+  // ── MOVIMIENTOS DEL DÍA ───────────────────────
+  btnDia.addEventListener("click", async () => {
+    resultsDiv.innerHTML = "";
+
+    const indices = getIndicesSeleccionados();
+
+    if (!indices.length) { showAlert("Seleccioná al menos una cuenta.", "warning"); return; }
+
+    btnDia.disabled = true;
+    btnDia.innerHTML = `<div class="spinner"></div> Obteniendo movimientos del día…`;
+
+    try {
+      const res  = await fetch("/api/generar-dia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresa: empresaSel.value, indices }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showAlert(data.error || "Error generando el reporte.", "error");
+        return;
+      }
+
+      renderResultados(data);
+      triggerDownload(data.zip, data.filename);
+
+    } catch (err) {
+      showAlert("Error de conexión al servidor.", "error");
+    } finally {
+      btnDia.disabled = false;
+      btnDia.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        Movimientos del día`;
     }
   });
 

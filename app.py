@@ -13,7 +13,6 @@ from flask import Flask, jsonify, render_template, request, session, redirect, u
 import json
 from reportes.generador import generar_zip
 
-USUARIOS = json.loads(os.environ.get("AUTH_USUARIOS", "{}"))
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-cambiar")
@@ -34,32 +33,6 @@ EMPRESAS_MODULOS = {
 # AUTH
 # ─────────────────────────────────────────────
 
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get("usuario"):
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return decorated
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    error = None
-    if request.method == "POST":
-        usuario = request.form.get("usuario")
-        password = request.form.get("password")
-        if USUARIOS.get(usuario) == password:
-            session["usuario"] = usuario
-            return redirect(url_for("index"))
-        error = "Usuario o contraseña incorrectos"
-    return render_template("login.html", error=error)
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
 
 # ─────────────────────────────────────────────
@@ -67,7 +40,6 @@ def logout():
 # ─────────────────────────────────────────────
 
 @app.route("/")
-@login_required
 def index():
     hoy = date.today()
     return render_template(
@@ -79,7 +51,6 @@ def index():
 
 
 @app.route("/api/cuentas")
-@login_required
 def api_cuentas():
     empresa = request.args.get("empresa", "eliantus").lower()
     if empresa not in EMPRESAS_MODULOS:
@@ -103,7 +74,6 @@ def api_cuentas():
 
 
 @app.route("/api/generar", methods=["POST"])
-@login_required
 def api_generar():
     data = request.get_json(force=True)
     empresa = data.get("empresa", "").lower()
@@ -144,6 +114,30 @@ def api_generar():
         }
     )
 
+@app.route("/api/generar-dia", methods=["POST"])
+def api_generar_dia():
+    data    = request.get_json(force=True)
+    empresa = data.get("empresa", "").lower()
+    indices = data.get("indices", [])
+
+    if empresa not in EMPRESAS_MODULOS:
+        return jsonify({"error": "Empresa inválida"}), 400
+    if not indices:
+        return jsonify({"error": "Seleccioná al menos una cuenta"}), 400
+
+    try:
+        from reportes.generador_dia import generar_zip_dia
+        zip_bytes, resultados = generar_zip_dia(empresa, indices)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    import base64
+    hoy = date.today().isoformat()
+    return jsonify({
+        "zip":       base64.b64encode(zip_bytes).decode(),
+        "filename":  f"{empresa.upper()}_DIA_{hoy}.zip",
+        "resultados": [{"nombre": r[0], "ok": r[1]} for r in resultados],
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)
