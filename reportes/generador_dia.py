@@ -5,6 +5,7 @@ Mismo formato visual que generador.py.
 """
 
 import io
+import os
 import zipfile
 import http.client
 import json
@@ -51,10 +52,8 @@ def _aplicar_fila(ws, row_num, fill, font):
 # LLAMADA A LA API
 # ─────────────────────────────────────────────
 
-def _obtener_movimientos_dia(cuenta, token, customer_id):
-    import os
-    hoy       = date.today().isoformat()
-    client_id = os.environ.get("ELIANTUS_CLIENTID", "BxN5OkffX0XHXgprpfybM5zCIaFphzgLvlz0")
+def _obtener_movimientos_dia(cuenta, token, customer_id, client_id):
+    hoy  = date.today().isoformat()
 
     conn = http.client.HTTPSConnection("api-gw.interbanking.com.ar")
     headers = {
@@ -170,6 +169,7 @@ def generar_zip_dia(empresa: str, indices: list):
     cuentas = mod.CUENTAS
 
     token, customer_id = obtener_token(empresa)
+    client_id          = os.environ.get(f"{empresa.upper()}_CLIENTID", "")
 
     hoy        = date.today().isoformat()
     resultados = []
@@ -182,7 +182,7 @@ def generar_zip_dia(empresa: str, indices: list):
             cuenta = cuentas[i]
             try:
                 general_data, movimientos = _obtener_movimientos_dia(
-                    cuenta, token, customer_id
+                    cuenta, token, customer_id, client_id
                 )
                 excel_bytes = _generar_excel(cuenta, general_data, movimientos)
                 filename    = f"{cuenta.abreviatura}_DIA_{hoy}.xlsx"
