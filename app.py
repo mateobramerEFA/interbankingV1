@@ -12,8 +12,9 @@ from flask import Flask, jsonify, render_template, request, session, redirect, u
 
 import json
 from reportes.generador import generar_zip
-from dotenv import load_dotenv
-load_dotenv()
+if os.path.exists(".env"):
+    from dotenv import load_dotenv
+    load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-cambiar")
