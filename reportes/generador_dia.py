@@ -1,7 +1,7 @@
 """
 generador_dia.py
 Genera un ZIP en memoria con un Excel por cuenta seleccionada (movimientos del día).
-Mismo formato visual que generador.py.
+Sin columnas de saldo ni fila de resumen.
 """
 
 import io
@@ -33,8 +33,6 @@ EMPRESAS = {
 
 HEADER_FILL   = PatternFill("solid", fgColor="1F4E79")
 HEADER_FONT   = Font(bold=True, color="FFFFFF")
-SALDO_FILL    = PatternFill("solid", fgColor="D6E4F0")
-SALDO_FONT    = Font(bold=True, color="1F4E79")
 SUBTOTAL_FILL = PatternFill("solid", fgColor="EBF5FB")
 SUBTOTAL_FONT = Font(bold=True)
 ACCOUNT_FILL  = PatternFill("solid", fgColor="FFF2CC")
@@ -53,8 +51,6 @@ def _aplicar_fila(ws, row_num, fill, font):
 # ─────────────────────────────────────────────
 
 def _obtener_movimientos_dia(cuenta, token, customer_id, client_id):
-    hoy  = date.today().isoformat()
-
     conn = http.client.HTTPSConnection("api-gw.interbanking.com.ar")
     headers = {
         "client_id":     client_id,
@@ -90,34 +86,24 @@ def _generar_excel(cuenta, general_data, movimientos):
     ws = wb.active
     ws.title = "Mov. del día"
 
+    # Título cuenta
     ws.append([f"▶ {cuenta.nombre}  — Movimientos del día {fecha_fmt}",
-               None, None, None, None, None, None, None, None])
+               None, None, None, None])
     _aplicar_fila(ws, ws.max_row, ACCOUNT_FILL, ACCOUNT_FONT)
 
-    ws.append(["Fecha", "Importe", "Tipo", "CUIT", "Descripción",
-               "Saldo Inicial", "Saldo Final", "Total Débitos", "Total Créditos"])
+    # Encabezado columnas
+    ws.append(["Fecha", "Importe", "Tipo", "CUIT", "Descripción"])
     for cell in ws[ws.max_row]:
         cell.font      = HEADER_FONT
         cell.fill      = HEADER_FILL
         cell.alignment = Alignment(horizontal="center")
 
     if not movimientos:
-        ws.append([fecha_fmt, None, "SIN MOVIMIENTOS", None, None,
-                   None, None, None, None])
+        ws.append([fecha_fmt, None, "SIN MOVIMIENTOS", None, None])
         _aplicar_fila(ws, ws.max_row, SUBTOTAL_FILL, SUBTOTAL_FONT)
     else:
-        opening    = general_data.get("opening_balance") or 0
-        ending     = general_data.get("ending_balance")
-        deb_total  = general_data.get("debits_total_amount")
-        cred_total = general_data.get("credits_total_amount")
-
-        saldo_corriente = opening
-
         for mov in sorted(movimientos, key=lambda x: x.get("process_date", "")):
-            importe   = mov.get("amount") or 0
-            saldo_ini = saldo_corriente
-            saldo_fin = saldo_corriente + importe
-            saldo_corriente = saldo_fin
+            importe = mov.get("amount") or 0
 
             descripcion = " | ".join(filter(None, [
                 mov.get("code_description_bank"),
@@ -125,23 +111,27 @@ def _generar_excel(cuenta, general_data, movimientos):
                 mov.get("code_description_standard"),
             ]))
 
-            ws.append([fecha_fmt, importe, mov.get("debit_credit_type"),
-                       mov.get("customer_cuit"), descripcion,
-                       saldo_ini, saldo_fin, None, None])
+            ws.append([
+                fecha_fmt,
+                importe,
+                mov.get("debit_credit_type"),
+                mov.get("customer_cuit"),
+                descripcion,
+            ])
 
-        ws.append([fecha_fmt, None, "RESUMEN DIA", None, None,
-                   opening, ending, deb_total, cred_total])
-        _aplicar_fila(ws, ws.max_row, SALDO_FILL, SALDO_FONT)
-
-    col_numericas = [2, 6, 7, 8, 9]
+    # Formato numérico solo columna importe
     for row in ws.iter_rows(min_row=3):
         for cell in row:
-            if cell.column in col_numericas and isinstance(cell.value, (int, float)):
+            if cell.column == 2 and isinstance(cell.value, (int, float)):
                 cell.number_format = NUMBER_FORMAT
 
+    # Anchos
     for col_letra, ancho in {
-        "A": 13, "B": 16, "C": 16, "D": 16,
-        "E": 45, "F": 17, "G": 17, "H": 17, "I": 17,
+        "A": 13,
+        "B": 16,
+        "C": 16,
+        "D": 16,
+        "E": 45,
     }.items():
         ws.column_dimensions[col_letra].width = ancho
 
