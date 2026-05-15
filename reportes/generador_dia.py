@@ -68,8 +68,6 @@ def _obtener_movimientos_dia(cuenta, token, customer_id, client_id):
         f"&bank-number={cuenta.banco}"
         f"&currency={cuenta.peso}"
         f"&customer-id={customer_id}"
-        f"&date-since={hoy}"
-        f"&date-until={hoy}"
         f"&limit=10000"
         f"&page=0"
     )
