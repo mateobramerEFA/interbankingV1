@@ -74,6 +74,20 @@ def api_cuentas():
     ]
     return jsonify(cuentas)
 
+@app.route("/debug-env")
+def debug_env():
+    import os
+    empresas = ["ELEMENTA", "ELIANTUS", "INTEGRA"]
+    resultado = {}
+    for e in empresas:
+        resultado[e] = {
+            "CLIENTID":     "OK" if os.environ.get(f"{e}_CLIENTID")     else "FALTA",
+            "SECRET":       "OK" if os.environ.get(f"{e}_SECRET")       else "FALTA",
+            "USER":         "OK" if os.environ.get(f"{e}_USER")         else "FALTA",
+            "URL_SERVICIO": "OK" if os.environ.get(f"{e}_URL_SERVICIO") else "FALTA",
+        }
+    return jsonify(resultado)
+
 
 @app.route("/api/generar", methods=["POST"])
 def api_generar():
@@ -140,6 +154,8 @@ def api_generar_dia():
         "filename":  f"{empresa.upper()}_DIA_{hoy}.zip",
         "resultados": [{"nombre": r[0], "ok": r[1]} for r in resultados],
     })
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)

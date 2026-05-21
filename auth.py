@@ -46,7 +46,8 @@ def obtener_token(empresa: str):
         {EMPRESA}_USER  -> customer_id
         {EMPRESA}_URL_SERVICIO
     """
-
+    
+    
     empresa_upper = empresa.upper()
     client_id = os.environ.get(f"{empresa_upper}_CLIENTID")
     client_secret = os.environ.get(f"{empresa_upper}_SECRET")
