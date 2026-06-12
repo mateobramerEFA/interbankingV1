@@ -74,19 +74,7 @@ def api_cuentas():
     ]
     return jsonify(cuentas)
 
-@app.route("/debug-env")
-def debug_env():
-    import os
-    empresas = ["ELEMENTA", "ELIANTUS", "INTEGRA"]
-    resultado = {}
-    for e in empresas:
-        resultado[e] = {
-            "CLIENTID":     "OK" if os.environ.get(f"{e}_CLIENTID")     else "FALTA",
-            "SECRET":       "OK" if os.environ.get(f"{e}_SECRET")       else "FALTA",
-            "USER":         "OK" if os.environ.get(f"{e}_USER")         else "FALTA",
-            "URL_SERVICIO": "OK" if os.environ.get(f"{e}_URL_SERVICIO") else "FALTA",
-        }
-    return jsonify(resultado)
+
 
 
 @app.route("/api/generar", methods=["POST"])
