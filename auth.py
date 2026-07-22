@@ -10,11 +10,6 @@ _cache: dict = {}  # key → (token, expires_at)
 
 
 def _pedir_token(client_id, client_secret, url_servicio):
-    cache_key = client_id
-    cached = _cache.get(cache_key)
-    if cached and time.time() < cached[1]:
-        return cached[0]
-
     r = requests.post(
         f"{TOKEN_URL}?scope={SCOPE}",
         headers={
@@ -32,10 +27,7 @@ def _pedir_token(client_id, client_secret, url_servicio):
     if not r.ok:
         raise Exception(f"Error al pedir token: {r.text}")
 
-    token = r.json()["access_token"]
-    _cache[cache_key] = (token, time.time() + TTL)
-    return token
-
+    return r.json()["access_token"]
 
 def obtener_token(empresa: str):
     """
