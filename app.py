@@ -112,9 +112,7 @@ def api_generar():
         {
             "zip": base64.b64encode(zip_bytes).decode(),
             "filename": f"{empresa.upper()}_{desde}_{hasta}.zip",
-            "resultados": [
-                {"nombre": c.abreviatura, "ok": ok} for c, ok in resultados
-            ],
+            "resultados": resultados,
         }
     )
 

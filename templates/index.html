@@ -274,8 +274,9 @@
       padding: 4px 0;
     }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .dot-ok  { background: #28a745; }
-    .dot-err { background: #ffc107; }
+    .dot-ok  { background: #28a745; }   /* con movimientos */
+    .dot-sin { background: #ffc107; }   /* sin movimientos (dato válido) */
+    .dot-err { background: #dc3545; }   /* falló la consulta */
 
     #accounts-list::-webkit-scrollbar { width: 6px; }
     #accounts-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
@@ -476,24 +477,58 @@
     }
   });
 
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
+  // Tres estados reales. Antes había dos, y "falló" se mostraba como
+  // "sin movimientos", que es información falsa para el usuario.
+  function estadoDe(r) {
+    if (!r.ok)             return "error";
+    if (r.movimientos > 0) return "con";
+    return "sin";
+  }
+
   function renderResultados(data) {
-    const conMov = data.resultados.filter(r => r.ok);
-    const sinMov = data.resultados.filter(r => !r.ok);
+    const conMov = data.resultados.filter(r => estadoDe(r) === "con");
+    const sinMov = data.resultados.filter(r => estadoDe(r) === "sin");
+    const fallas = data.resultados.filter(r => estadoDe(r) === "error");
 
     let html = `<div class="card"><div class="card-title">Resultados</div>`;
     html += `<div class="result-summary">`;
     if (conMov.length)
       html += `<span class="result-chip" style="background:var(--green);color:var(--green-text)">✔ ${conMov.length} con movimientos</span>`;
     if (sinMov.length)
-      html += `<span class="result-chip" style="background:var(--amber);color:var(--amber-text)">⚠ ${sinMov.length} sin movimientos</span>`;
-    html += `</div><br>`;
+      html += `<span class="result-chip" style="background:var(--amber);color:var(--amber-text)">— ${sinMov.length} sin movimientos</span>`;
+    if (fallas.length)
+      html += `<span class="result-chip" style="background:var(--red);color:var(--red-text)">✖ ${fallas.length} con error</span>`;
+    html += `</div>`;
+
+    if (fallas.length) {
+      html += `<div class="alert alert-error" style="margin-top:12px">
+        <span>✖</span>
+        <span><strong>${fallas.length} cuenta(s) no se pudieron consultar.</strong>
+        Esos datos NO están en el ZIP y no significan "sin movimientos".
+        Reintentá en unos minutos; si persiste, avisá a sistemas.</span>
+      </div>`;
+    }
+    html += `<br>`;
+
+    const meta = {
+      con:   { dot: "dot-ok",  texto: r => `${r.movimientos} movimiento${r.movimientos === 1 ? "" : "s"}`, color: "#666"    },
+      sin:   { dot: "dot-sin", texto: () => "sin movimientos",                                             color: "#666"    },
+      error: { dot: "dot-err", texto: () => "error al consultar",                                          color: "#c0392b" },
+    };
 
     html += `<div class="accounts-results">`;
     data.resultados.forEach(r => {
-      html += `<div class="account-result">
-        <span class="dot ${r.ok ? 'dot-ok' : 'dot-err'}"></span>
-        <span>${r.nombre}</span>
-        <span style="margin-left:auto;font-size:.75rem;color:#666">${r.ok ? 'con movimientos' : 'sin movimientos'}</span>
+      const m = meta[estadoDe(r)];
+      html += `<div class="account-result"${r.error ? ` title="${escapeHtml(r.error)}"` : ""}>
+        <span class="dot ${m.dot}"></span>
+        <span>${escapeHtml(r.nombre)}</span>
+        <span style="margin-left:auto;font-size:.75rem;color:${m.color}">${m.texto(r)}</span>
       </div>`;
     });
     html += `</div></div>`;

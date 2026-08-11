@@ -61,17 +61,59 @@ def _aplicar_fila(ws, row_num, fill, font):
 # LLAMADAS A LA API
 # ─────────────────────────────────────────────
 
+API_HOST = "api-gw.interbanking.com.ar"
+API_TIMEOUT = 30   # segundos; antes era infinito y podía colgar el worker
+
+
+def _llamar_api(path, token, client_id, tag):
+    """
+    GET al gateway de Interbanking.
+
+    Devuelve el JSON parseado, o levanta RuntimeError con el contexto necesario
+    para diagnosticar. Distingue tres fallas que antes colapsaban todas en
+    'Expecting value: line 1 column 1 (char 0)':
+        - status != 200        (403 = IP no habilitada, 429 = cuota, 401 = token)
+        - body vacío
+        - body que no es JSON  (típicamente HTML de error del gateway)
+    """
+    conn = http.client.HTTPSConnection(API_HOST, timeout=API_TIMEOUT)
+    try:
+        conn.request("GET", path, headers={
+            "client_id":     client_id,
+            "Authorization": f"Bearer {token}",
+            "accept":        "application/json",
+        })
+        resp        = conn.getresponse()
+        status      = resp.status
+        reason      = resp.reason
+        ctype       = resp.getheader("Content-Type", "")
+        retry_after = resp.getheader("Retry-After")
+        body        = resp.read().decode("utf-8", errors="replace")
+    finally:
+        conn.close()
+
+    preview = body[:300].replace("\n", " ")
+    extra   = f" Retry-After={retry_after}" if retry_after else ""
+
+    if status != 200:
+        raise RuntimeError(
+            f"[{tag}] HTTP {status} {reason} | ctype={ctype}{extra} | body={preview!r}"
+        )
+    if not body.strip():
+        raise RuntimeError(f"[{tag}] HTTP 200 con body VACIO | ctype={ctype}")
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"[{tag}] HTTP 200 pero el body no es JSON ({e}) | ctype={ctype} | body={preview!r}"
+        ) from e
+
+
 def _get_statements(cuenta, token, customer_id, client_id, desde, hasta):
     """
     /v1/statements → días anteriores.
     Devuelve lista de statements, cada uno con movement_detail, opening_balance, etc.
     """
-    conn = http.client.HTTPSConnection("api-gw.interbanking.com.ar")
-    headers = {
-        "client_id":     client_id,
-        "Authorization": f"Bearer {token}",
-        "accept":        "application/json",
-    }
     path = (
         f"/api/prod/v1/accounts/{cuenta.numero}/statements"
         f"?account-type={cuenta.tipo}"
@@ -82,9 +124,16 @@ def _get_statements(cuenta, token, customer_id, client_id, desde, hasta):
         f"&date-until={hasta}"
         f"&limit=10000"
     )
-    conn.request("GET", path, headers=headers)
-    data = json.loads(conn.getresponse().read().decode("utf-8"))
-    return data.get("general_data", {}), data.get("statements", [])
+    data = _llamar_api(path, token, client_id, "statements")
+
+    # Clave ausente ≠ lista vacía. Sin este chequeo, una respuesta degradada
+    # se convertía en un Excel vacío marcado como OK ("sin movimientos" falso).
+    if "statements" not in data:
+        raise RuntimeError(
+            f"[statements] Respuesta sin clave 'statements'. "
+            f"Claves={list(data)} | {str(data)[:300]!r}"
+        )
+    return data.get("general_data", {}), data["statements"]
 
 
 def _get_movimientos_dia(cuenta, token, customer_id, client_id):
@@ -92,12 +141,6 @@ def _get_movimientos_dia(cuenta, token, customer_id, client_id):
     /v2/movements/dia → movimientos de hoy.
     No trae saldo — se calcula a partir del ending_balance del día anterior.
     """
-    conn = http.client.HTTPSConnection("api-gw.interbanking.com.ar")
-    headers = {
-        "client_id":     client_id,
-        "Authorization": f"Bearer {token}",
-        "accept":        "application/json",
-    }
     path = (
         f"/api/prod/v2/accounts/{cuenta.numero}/movements/dia"
         f"?account-type={cuenta.tipo}"
@@ -107,9 +150,14 @@ def _get_movimientos_dia(cuenta, token, customer_id, client_id):
         f"&limit=10000"
         f"&page=0"
     )
-    conn.request("GET", path, headers=headers)
-    data = json.loads(conn.getresponse().read().decode("utf-8"))
-    return data.get("general_data", {}), data.get("movements_detail", [])
+    data = _llamar_api(path, token, client_id, "movements/dia")
+
+    if "movements_detail" not in data:
+        raise RuntimeError(
+            f"[movements/dia] Respuesta sin clave 'movements_detail'. "
+            f"Claves={list(data)} | {str(data)[:300]!r}"
+        )
+    return data.get("general_data", {}), data["movements_detail"]
 
 
 # ─────────────────────────────────────────────
@@ -248,6 +296,7 @@ def _nombre_archivo(cuenta, desde, hasta):
 # ─────────────────────────────────────────────
 
 def _generar_excel_cuenta(cuenta, token, customer_id, client_id, desde, hasta):
+    """Devuelve (excel_bytes, cantidad_de_movimientos)."""
     hoy = date.today().isoformat()
 
     wb = Workbook()
@@ -256,7 +305,8 @@ def _generar_excel_cuenta(cuenta, token, customer_id, client_id, desde, hasta):
 
     _escribir_encabezado_cuenta(ws, cuenta, desde, hasta)
 
-    saldo_final_ayer = None   # se alimenta con el ending_balance del último statement
+    total_movimientos = 0
+    saldo_final_ayer  = None   # se alimenta con el ending_balance del último statement
 
     # ── STATEMENTS (días anteriores a hoy) ──────────────────────────────
     # Si hasta == hoy pedimos statements hasta ayer; si hasta < hoy, pedimos todo.
@@ -273,6 +323,7 @@ def _generar_excel_cuenta(cuenta, token, customer_id, client_id, desde, hasta):
 
         for statement in statements_sorted:
             _escribir_statement(ws, statement)
+            total_movimientos += len(statement.get("movement_detail", []))
             # Guardamos el ending_balance del último día para usarlo como saldo inicial de hoy
             if statement.get("ending_balance") is not None:
                 saldo_final_ayer = statement["ending_balance"]
@@ -283,13 +334,14 @@ def _generar_excel_cuenta(cuenta, token, customer_id, client_id, desde, hasta):
             cuenta, token, customer_id, client_id
         )
         _escribir_movimientos_dia(ws, movimientos_hoy, saldo_final_ayer)
+        total_movimientos += len(movimientos_hoy)
 
     _aplicar_formato_hoja(ws)
 
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    return buf.read()
+    return buf.read(), total_movimientos
 
 
 # ─────────────────────────────────────────────
@@ -299,7 +351,9 @@ def _generar_excel_cuenta(cuenta, token, customer_id, client_id, desde, hasta):
 def generar_zip(empresa: str, desde: str, hasta: str, cuentas_seleccionadas=None):
     """
     Genera un ZIP en memoria con un Excel por cuenta.
-    Retorna (zip_bytes, resultados).
+
+    Retorna (zip_bytes, resultados), donde cada resultado es un dict:
+        {"nombre": str, "ok": bool, "movimientos": int, "error": str | None}
     """
     config  = EMPRESAS[empresa]
     mod     = importlib.import_module(config["cuentas"])
@@ -315,17 +369,30 @@ def generar_zip(empresa: str, desde: str, hasta: str, cuentas_seleccionadas=None
     with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for cuenta in cuentas_a_usar:
             try:
-                excel_bytes = _generar_excel_cuenta(
+                excel_bytes, movimientos = _generar_excel_cuenta(
                     cuenta, token, customer_id, client_id, desde, hasta
                 )
                 filename = _nombre_archivo(cuenta, desde, hasta)
                 zf.writestr(filename, excel_bytes)
-                resultados.append((cuenta, True))
-                print(f"[OK] {cuenta.nombre} → {filename}")
+                # El print va ANTES del append: si falla (p.ej. consola Windows
+                # en cp1252), el except no puede agregar un segundo resultado
+                # para la misma cuenta. Sin acentos ni flechas por lo mismo.
+                print(f"[OK] {cuenta.nombre} -> {filename} ({movimientos} movimientos)")
+                resultados.append({
+                    "nombre":      cuenta.abreviatura,
+                    "ok":          True,
+                    "movimientos": movimientos,
+                    "error":       None,
+                })
 
             except Exception as e:
                 print(f"[ERROR] {cuenta.nombre}: {e}")
-                resultados.append((cuenta, False))
+                resultados.append({
+                    "nombre":      cuenta.abreviatura,
+                    "ok":          False,
+                    "movimientos": 0,
+                    "error":       str(e),
+                })
 
     zip_buf.seek(0)
     return zip_buf.read(), resultados
